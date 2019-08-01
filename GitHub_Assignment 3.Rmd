@@ -1,0 +1,163 @@
+---
+title: "Learning from text - Lexical Richness and Productivity"
+author: "Céline Van den Rul"
+output: html_notebook
+---
+
+# Analysing lexical richness and productivity in Pacific island states' UN speeches in 2017
+
+I investigate the lexical diversity and productivity of small island developing states (SIDS), and more specifically those in the Pacific. To do this I use the UNGD corpus consisting of the state representives' speeches at the UN. I hypothesize that these states have a high incentive to deliver a powerful and engaging speech at the UN as this is one of the sole opportunities they get to make their voice heard at such a high-level platform. In addition, pacific island states have been known to target their speech towards a single issue that affects and will affect them most in the nearest future: climate change. Indeed, the consequences of climate change will determine the mere survival of these pacific islands who are directly threatened by rising sea levels. For the two reasons stated above I expect small pacific island states to deliver speeches containing a higher level of lexical richness and productivity in contrast to the average UN speeches.  
+
+## Preparing the dataset
+```{r}
+library(quanteda)
+library(readtext)
+library(dplyr)
+library(tidyverse)
+DATA_DIR <- "/Users/celinevdr/Downloads/Converted Sessions" 
+ungd_files <- readtext(paste0(DATA_DIR, "/*"), 
+                                 docvarsfrom = "filenames", 
+                                 dvsep="_", 
+                                 docvarnames = c("Country", "Session", "Year"))
+
+
+ungd_files$doc_id <- str_replace(ungd_files$doc_id , ".txt", "") %>%
+   str_replace(. , "_\\d{2}", "") 
+class(ungd_files$doc_id)
+class(ungd_files$Country)
+class(ungd_files$Session)
+
+ungd_corpus <- corpus(ungd_files, text_field = "text") 
+summary(ungd_corpus)
+```
+
+## Selecting the countries and year of interest
+Not all small pacific island states are members of the UN. As such, we were able to identify 12 pacific island states members: Vanatu (VUT), Tuvalu (TUV), Tonga (TON), Solomon Islands (SLB), Samoa (WSM), Papua New Guinea (PNG), Palau (PLW), Nauru (NRU), Marshall Islands (MHL), Kiribati (KIR), Fiji (FJI) and the Federated States of Micronesia (FSM). In addition, we chose to focus only on the year 2017.
+I thus select two corpora: one containing all the speeches of heads of states in 2017 (ungdc.2017) which will be used as our banchmark for comparison and the corpus containing only the speeches given by heads of states of the small pacific island states (ungdc.2017.PIS)
+
+```{r}
+ungdc.2017 <- corpus_subset(ungd_corpus, Year==2017)
+ungdc.2017.PIS <- corpus_subset(ungdc.2017, Country %in% c("VUT", "TUV", "TON", "SLB", "WSM", "PNG", "PLW", "NRU", "MHL", "KIR", "FJI", "FSM"))
+```
+
+## Pre-processing
+
+Before I begin with the lexical analysis, I need proceed with the tokenization of our corpora. This will separate the words in our corpora and allow for more meaningful results in the following lexical measurement methods. I also proceed with additional text normalization methods.  
+
+```{r}
+#Tokenization and basic pre-processing
+tok_PIS <- tokens(ungdc.2017.PIS, what = "word",
+              remove_punct = TRUE,
+              remove_symbols = TRUE,
+              remove_numbers = TRUE,
+              remove_twitter = TRUE,
+              remove_url = TRUE,
+              remove_hyphens = FALSE,
+              verbose = TRUE, 
+              include_docvars = TRUE)
+
+tok_UN <- tokens(ungdc.2017, what = "word",
+              remove_punct = TRUE,
+              remove_symbols = TRUE,
+              remove_numbers = TRUE,
+              remove_twitter = TRUE,
+              remove_url = TRUE,
+              remove_hyphens = FALSE,
+              verbose = TRUE, 
+              include_docvars = TRUE)
+
+tok_PIS <- tokens_tolower(tok_PIS)
+tok_PIS <- tokens(tok_PIS, ngrams = c(1:2), include_docvars = TRUE) 
+
+tok_UN <- tokens_tolower(tok_UN)
+tok_UN <- tokens(tok_UN, ngrams = c(1:2), include_docvars = TRUE) 
+```
+
+We can then add one more step to the pre-processing of our corpora: removing the stopwords. Stopwords have little lexical richness and are only used to bind words in a sentence. As such, I decide to remove them in order not to create noise in our analysis but it should be kept in mind that doing this will signifcantly drop the number of tokens. 
+```{r}
+tok_PIS <- tokens_select(tok_PIS, stopwords("english"), selection = "remove", padding = FALSE) 
+tok_UN <- tokens_select(tok_UN, stopwords("english"), selection = "remove", padding = FALSE) 
+```
+
+## Tokens
+The number of tokens below show the total number of words in the speeches of the small pacific island heads of state. 
+```{r}
+ntoken(tok_PIS)
+```
+
+The number of tokens below show the average total number of words found in UN speeches in 2017. This comparison enables us to find that the majority of the speeches from small pacific island states have token numbers above the UN mean, with four of them even belonging to the 3rd Quartile. However, five of them are also below the UN mean.  
+```{r}
+summary(ntoken(tok_UN))
+```
+
+## Types
+The type frequency shows the total number of unique words found in UN speeches. 
+
+```{r}
+ntype(tok_PIS) 
+```
+
+Here again, by comparing it to the UN average, we can see that most pacific island states use an amount of unique words that is above the UN mean, with Vanatu (VUT), Tuvalu (TUV), Solomon Islands (SLB) and Samoa (WSM) performing best.
+```{r}
+summary(ntype(tok_UN))
+```
+
+## Type-Token Ratio (TTR)
+TTR is a popular measure of lexical richness. A high TTR suggests that the corpus is characterized by lexical diversity. A low TTR suggests that there are lexical repitions. In the following code we use the quanteda package and the command textstat_lexdiv() to estimate the TTR. 
+
+I first perform this on my corpus of speeches from small pacific island states. I can already say that with TTR above 0.5, all small pacific island state speeches show a high level of lexical richness.  
+
+```{r}
+dfm(tok_PIS) %>% 
+    textstat_lexdiv(measure = "TTR")
+```
+
+I then compare it to our overall corpus of speeches in 2017. This allows me to see that, when compared against the average UN speech in 2017, most of the pacific island states' lexical diversity score is either close to the mean or below it. I can therefore conclude using the TTR measure that, although small pacific island states did achieve a high lexical diversity score, this does not fall above the UN average. 
+
+```{r}
+UN_TTR <- dfm(tok_UN) %>% 
+    textstat_lexdiv(measure = "TTR")
+summary(UN_TTR)
+```
+
+## Hapax Richness
+Another measure of lexical diversity is Hapax richness, defined as the number of words that occur only once divided by the total number of words. I can calculate that very simply by using a logical operation on the document-feature matrix, to return a logical value for each term that occurs once, and then sum to get a count. I then calculate it as a proportion of the overall number of words to give greater clarity in the interpretation. 
+
+I perform this measure for the speeches of small pacific island states 
+
+```{r}
+ungdc.2017.PIS_dfm <- dfm(ungdc.2017.PIS)
+rowSums(ungdc.2017.PIS_dfm == 1) %>% head()
+hapax_proportion <- rowSums(ungdc.2017.PIS_dfm == 1)/ntoken(ungdc.2017.PIS_dfm)
+hapax_proportion
+```
+
+... and for the general UN corpus. I can conclude that similar to the TTR measure, I find that pacific island states did not outperform the average of UN speeches deliverd in 2017. Rather, most of their lexical diversity scores is close to the UN mean or slightly below with the exception of the Federated States of Micronesia, Papua New Guinea and Tonga. It is interesting to note that Tonga performs slightly better with this measure of lexical diversity than with the TTR.
+
+```{r}
+ungdc.2017_dfm <- dfm(ungdc.2017)
+rowSums(ungdc.2017_dfm == 1) %>% head()
+hapax_proportion_UN <- rowSums(ungdc.2017_dfm == 1)/ntoken(ungdc.2017_dfm)
+summary(hapax_proportion_UN)
+```
+
+## Level of sophistication
+Finally, I evaluate the level of sophistication found in my corpora by relying on some of the measures described by Benoit (2018) and focusing on the mean syllables per word and sentence lengths. Here again I rely on the quanteda package. 
+
+I perform this for our corpus of small pacific island states. 
+
+```{r}
+textstat_readability(ungdc.2017.PIS, c("meanSentenceLength", "meanWordSyllables"))
+```
+
+I then compare to the UN average, shown below. I can conclude that the level of sophistication of small pacific island states fares relatively well in contrast to the UN average, with most of their mean sentence leangth and word syllables scores above the UN average. Tonga performs particularly well with both scores in the 3rd Quartile of UN speeches.  
+
+```{r}
+UN_text_readability <- textstat_readability(ungdc.2017, c("meanSentenceLength", "meanWordSyllables"))
+summary(UN_text_readability)
+```
+
+## Conclusion
+Overall we can say that heads of states of small pacific island states delivered speeches with high scores of lexical diversity and sophistication. My hypothesis would have suggested that these would be higher than the UN average. In terms of levical diversity, I find that small pacific states do not significantly outperform the UN average but rather perform similarly than the UN average. Scores of lexical sophistication show a slightly better performance, however none of them are among the high UN performers, except for Tonga. 
+
+
